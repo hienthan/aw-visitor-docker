@@ -110,6 +110,14 @@ services:
       MYSQL_DB_USER: ${MYSQL_DB_USER:-root}
       MYSQL_DB_PASSWORD: ${MYSQL_DB_PASSWORD:-admin}
       MYSQL_DB_DATABASE: ${MYSQL_DB_DATABASE:-user_db}
+      # ... các biến cũ ...
+      PG_PORT: ${PG_PORT:-7201}
+      PG_HOST: ${PG_HOST:-10.1.16.50}
+      PG_USER: ${PG_USER:-postgres}
+      PG_PASSWORD: ${PG_PASSWORD:-postgres}
+      PG_DATABASE: ${PG_DATABASE:-visitor_db}
+      MYSQL_DB_DATABASE_MSG: ${MYSQL_DB_DATABASE_MSG:-msgserver_db}
+      MYSQL_DB_DATABASE_VFA: ${MYSQL_DB_DATABASE_VFA:-vfa_db}
 
     # networks: Kết nối vào network nào
     # Container cùng network có thể giao tiếp bằng container name
