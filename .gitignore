@@ -1,0 +1,45 @@
+# =============================================================================
+# Git Ignore for Docker Project
+# =============================================================================
+
+# Environment files (chứa secrets)
+.env
+.env.local
+.env.*.local
+
+# Database data (bind mount - không commit)
+db/data/
+
+# Node modules
+node_modules/
+
+# Build outputs (rebuild được)
+aw-visitor/dist/
+aw-visitor-backend-adonisjs/build/
+
+# Storage (uploaded files - backup riêng)
+aw-visitor-backend-adonisjs/storage/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+.cursor/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Backup files
+*.sql
+*.sql.gz
+*.tar.gz
+backup_*/
+
+# Docker
+.docker/

@@ -1,0 +1,190 @@
+# =============================================================================
+# AW-VISITOR Docker Compose - Fully Commented for Learning
+# =============================================================================
+# Project: aw-visitor
+# Mục tiêu: Self-contained, portable, có thể chạy trên bất kỳ máy nào
+#
+# Cách dùng:
+#   docker compose up -d            # Start all services
+#   docker compose down             # Stop all services
+#   docker compose logs -f          # Xem logs
+#   docker compose ps               # Xem status
+# =============================================================================
+
+# name: Tên project trong Docker Desktop
+# - Tất cả containers sẽ được group dưới tên này
+# - Nếu không set, Docker dùng tên folder làm project name
+name: aw-visitor
+
+services:
+  # ===========================================================================
+  # BACKEND - AdonisJS API Server
+  # ===========================================================================
+  backend:
+    # image: Base image để chạy container
+    # - node:22-alpine: Node.js v22 trên Alpine Linux (nhẹ, ~50MB)
+    # - Các option khác: node:22 (Debian, ~300MB), node:22-slim (~80MB)
+    image: node:22-alpine
+
+    # container_name: Tên cố định cho container
+    # - Nếu không set, Docker tự generate: <project>-<service>-<number>
+    # - Đặt tên giúp dễ reference: docker exec aw-visitor-backend ...
+    container_name: aw-visitor-backend
+
+    # restart: Policy khi container crash hoặc server restart
+    # - "no": Không tự restart (default)
+    # - "always": Luôn restart, kể cả khi stop thủ công
+    # - "unless-stopped": Restart trừ khi stop thủ công (RECOMMENDED)
+    # - "on-failure": Chỉ restart khi exit code != 0
+    # Dùng unless-stopped vì: khi stop để maintenance, không muốn nó tự start lại
+    restart: unless-stopped
+
+    # working_dir: Thư mục làm việc trong container
+    # - Tương đương: cd /app trước khi chạy command
+    working_dir: /app
+
+    # volumes: Mount folders từ host vào container
+    # Syntax: <host_path>:<container_path>[:options]
+    # Options:
+    #   - ro: read-only
+    #   - rw: read-write (default)
+    # Bind mount vs Named volume:
+    #   - Bind mount (./path): Map trực tiếp folder từ host
+    #   - Named volume (volume_name): Docker quản lý, lưu ở /var/lib/docker/volumes
+    volumes:
+      # Mount toàn bộ backend folder (code + node_modules)
+      - ./aw-visitor-backend-adonisjs:/app
+      # Storage riêng cho uploaded files - KHÔNG read-only vì cần write
+      - ./aw-visitor-backend-adonisjs/storage:/app/build/public/api/storage/app
+
+    # command: Lệnh chạy khi container start
+    # - Override CMD trong Dockerfile
+    # - Có 2 syntax: shell form và exec form
+    # - Exec form (dùng array) recommended: không chạy qua shell, signals được forward đúng
+    command: ["node", "./build/bin/server.js"]
+
+    # environment: Biến môi trường cho container
+    # Best practice: Đưa ra docker-compose thay vì hardcode trong Dockerfile
+    # Lý do:
+    #   - Dễ thay đổi không cần rebuild image
+    #   - Tách biệt config và code
+    #   - Có thể dùng .env file
+    environment:
+      # NODE_ENV: production/development
+      # - production: disable dev features, optimize performance
+      NODE_ENV: ${NODE_ENV:-production}
+      
+      # HOST: IP để bind
+      # - 0.0.0.0: Listen tất cả interfaces (cho phép access từ ngoài container)
+      # - 127.0.0.1: Chỉ localhost (không access được từ ngoài)
+      HOST: 0.0.0.0
+      
+      # PORT: Port nội bộ của app
+      PORT: 3333
+      
+      # APP_KEY: Secret key cho encryption
+      APP_KEY: ${APP_KEY:-your-secret-key-change-in-production}
+      
+      # TZ: Timezone
+      TZ: Asia/Ho_Chi_Minh
+      
+      # LOG_LEVEL: trace/debug/info/warn/error
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      
+      # Database connection
+      # DB_HOST: Dùng container name thay vì IP
+      # Docker DNS tự động resolve container name → IP
+      DB_CONNECTION: pg
+      DB_HOST: aw-visitor-postgres
+      DB_PORT: 5432
+      DB_USER: ${DB_USER:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD:-postgres}
+      DB_DATABASE: ${DB_NAME:-visitor_db}
+      
+      # External services
+      LARAVEL_API_ENDPOINT: ${LARAVEL_API_ENDPOINT:-https://example.com/api}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-*}
+      
+      # MySQL connections (nếu cần)
+      MYSQL_DB_HOST: ${MYSQL_DB_HOST:-10.1.16.50}
+      MYSQL_DB_USER: ${MYSQL_DB_USER:-root}
+      MYSQL_DB_PASSWORD: ${MYSQL_DB_PASSWORD:-admin}
+      MYSQL_DB_DATABASE: ${MYSQL_DB_DATABASE:-user_db}
+
+    # networks: Kết nối vào network nào
+    # Container cùng network có thể giao tiếp bằng container name
+    networks:
+      - aw-visitor-network
+
+    # healthcheck: Kiểm tra container có healthy không
+    # Docker dùng để:
+    #   - Báo status: healthy/unhealthy
+    #   - depends_on với condition: service_healthy
+    healthcheck:
+      # test: Lệnh kiểm tra (exit 0 = healthy)
+      # Dùng 127.0.0.1 thay vì localhost (tránh IPv6 issues)
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3333/api/visitor/testApi"]
+      # interval: Thời gian giữa các lần check
+      interval: 30s
+      # timeout: Thời gian chờ response
+      timeout: 10s
+      # retries: Số lần fail trước khi đánh dấu unhealthy
+      retries: 3
+      # start_period: Thời gian grace period khi container mới start
+      start_period: 60s
+
+  # ===========================================================================
+  # FRONTEND - Nginx Static Server + Reverse Proxy
+  # ===========================================================================
+  frontend:
+    image: nginx:alpine
+    container_name: aw-visitor-frontend
+    restart: unless-stopped
+
+    # ports: Map port từ host vào container
+    # Syntax: "<host_port>:<container_port>"
+    # - Chỉ container này expose port ra ngoài
+    # - Backend không expose port (internal only)
+    ports:
+      - "${FRONTEND_PORT:-6201}:80"
+
+    volumes:
+      # Static files từ Nuxt build
+      - ./aw-visitor/dist:/usr/share/nginx/html:ro
+      # Nginx config - read-only vì không cần modify
+      - ./nginx/aw-visitor.conf:/etc/nginx/conf.d/default.conf:ro
+
+    # depends_on: Thứ tự start và dependency
+    # condition options:
+    #   - service_started: Chỉ đợi container start
+    #   - service_healthy: Đợi healthcheck pass (RECOMMENDED)
+    #   - service_completed_successfully: Đợi container exit 0
+    depends_on:
+      backend:
+        condition: service_healthy
+
+    networks:
+      - aw-visitor-network
+
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:80/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+# =============================================================================
+# NETWORKS
+# =============================================================================
+# Docker networks cho phép containers giao tiếp
+# Types:
+#   - bridge: Default, containers có thể giao tiếp qua container name
+#   - host: Dùng network của host (không isolation)
+#   - none: Không có network
+networks:
+  aw-visitor-network:
+    # external: true = Network đã tồn tại, không tạo mới
+    # Nếu false (default): Docker tạo network mới
+    external: true
+    # name: Tên thực của network (khác với key ở trên)
+    name: aw-visitor-network

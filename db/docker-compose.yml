@@ -1,0 +1,101 @@
+# =============================================================================
+# PostgreSQL Database - Standalone Container
+# =============================================================================
+# Chạy riêng biệt để:
+#   - Start trước app (database phải ready trước)
+#   - Dễ backup/restore không ảnh hưởng app
+#   - Có thể upgrade database độc lập
+#
+# Cách dùng:
+#   cd db
+#   docker compose up -d                # Start database
+#   docker compose logs -f              # Xem logs
+#   docker compose down                 # Stop (data vẫn còn)
+#   docker compose down -v              # Stop + XÓA DATA (cẩn thận!)
+# =============================================================================
+
+# name: Cùng project name với app để group trong Docker Desktop
+name: aw-visitor
+
+services:
+  postgres:
+    # image: PostgreSQL version
+    # - postgres:15: Debian-based, đầy đủ tính năng
+    # - postgres:15-alpine: Nhẹ hơn (~80MB vs ~150MB)
+    # - Chọn version cụ thể (15) thay vì latest để tránh breaking changes
+    image: postgres:15
+    
+    container_name: aw-visitor-postgres
+    
+    # restart: unless-stopped
+    # - Database cần always available
+    # - Nếu dùng "always": khi stop để backup, nó sẽ tự start lại (không mong muốn)
+    restart: unless-stopped
+    
+    environment:
+      # POSTGRES_USER: Username cho superuser
+      # ${VAR:-default}: Lấy từ .env, nếu không có dùng default
+      POSTGRES_USER: ${DB_USER:-postgres}
+      
+      # POSTGRES_PASSWORD: Password (required)
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+      
+      # POSTGRES_DB: Database được tạo khi init
+      POSTGRES_DB: ${DB_NAME:-visitor_db}
+      
+      # TZ: Timezone cho logs và timestamp functions
+      TZ: Asia/Ho_Chi_Minh
+      
+      # POSTGRES_INITDB_ARGS: Arguments cho initdb
+      # - UTF8: Unicode encoding
+      # - locale=C: Locale đơn giản, tốt cho performance
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+    
+    # volumes: BIND MOUNT cho data persistence
+    # Tại sao dùng bind mount thay vì named volume:
+    #   - Dễ backup: chỉ cần copy folder
+    #   - Dễ migrate: copy folder sang server mới
+    #   - Có thể access trực tiếp từ host
+    volumes:
+      - ./data:/var/lib/postgresql/data
+    
+    # ports: Expose để dùng dev tools (pgAdmin, DBeaver)
+    # Format: "host:container"
+    # 7201:5432 = Access qua localhost:7201 trên host
+    ports:
+      - "${DB_PORT:-7201}:5432"
+    
+    networks:
+      - aw-visitor-network
+    
+    # healthcheck: Quan trọng cho database
+    # pg_isready: Built-in tool kiểm tra PostgreSQL ready chưa
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-visitor_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      # start_period: Database cần thời gian init lần đầu
+      start_period: 30s
+    
+    # deploy: Resource limits (optional nhưng recommended cho production)
+    # Uncomment nếu cần giới hạn resources
+    # deploy:
+    #   resources:
+    #     limits:
+    #       memory: 512M
+    #       cpus: '0.5'
+    #     reservations:
+    #       memory: 256M
+
+# =============================================================================
+# NETWORKS
+# =============================================================================
+# Network được tạo bởi database container
+# App containers sẽ connect vào network này (external: true)
+networks:
+  aw-visitor-network:
+    driver: bridge
+    # name: Tên thực của network
+    # Nếu không set, Docker tạo: <project>_<network_key>
+    name: aw-visitor-network
