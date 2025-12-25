@@ -44,5 +44,5 @@ backup_*/
 # Docker
 .docker/
 
-aw-visitor-backend-adonisjs/
-aw-visitor/
+# aw-visitor-backend-adonisjs/
+# aw-visitor/
