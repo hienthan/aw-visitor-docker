@@ -16,6 +16,9 @@
 # - Nếu không set, Docker dùng tên folder làm project name
 name: aw-visitor
 
+volumes:
+  aw-visitor-storage:
+    name: aw-visitor-storage  # Tên cố định để share
 services:
   # ===========================================================================
   # BACKEND - AdonisJS API Server
@@ -54,8 +57,8 @@ services:
     volumes:
       # Mount toàn bộ backend folder (code + node_modules)
       - ./aw-visitor-backend-adonisjs:/app
-      # Storage riêng cho uploaded files - KHÔNG read-only vì cần write
-      - ./aw-visitor-backend-adonisjs/storage:/app/build/public/api/storage/app
+      # Shared storage - backend write (mount vào build folder vì AdonisJS chạy từ đó)
+      - ${SHARED_STORAGE_PATH:-../shared-storage}/app:/app/build/storage/app
 
     # command: Lệnh chạy khi container start
     # - Override CMD trong Dockerfile
@@ -160,8 +163,10 @@ services:
     volumes:
       # Static files từ Nuxt build
       - ./aw-visitor/dist:/usr/share/nginx/html:ro
-      # Nginx config - read-only vì không cần modify
+      # Nginx config
       - ./nginx/aw-visitor.conf:/etc/nginx/conf.d/default.conf:ro
+      # Shared storage - mount vào path riêng
+      - ${SHARED_STORAGE_PATH:-../shared-storage}/app:/storage/app:ro
 
     # depends_on: Thứ tự start và dependency
     # condition options:
