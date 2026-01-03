@@ -67,6 +67,12 @@ services:
     
     networks:
       - aw-visitor-network
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     
     # healthcheck: Quan trọng cho database
     # pg_isready: Built-in tool kiểm tra PostgreSQL ready chưa

@@ -30,9 +30,14 @@ docker compose ps
 cd aw-visitor && npm run build
 docker exec aw-visitor-frontend nginx -s reload
 
-# Backend
-cd aw-visitor-backend-adonisjs && npm run build
+# Backend - Quick update (chỉ code, không rebuild image)
+./scripts/build-backend.sh
 docker compose restart backend
+
+# Backend - Full deploy (code + rebuild image)
+./scripts/deploy.sh
+
+# Xem chi tiết: docs/BACKEND_DEPLOYMENT.md
 ```
 
 ## Backup
@@ -77,7 +82,16 @@ aw-visitor-docker/
 │
 ├── docs/
 │   ├── DOCKER_GUIDE.md       # ⭐ Chi tiết Docker concepts, commands, rollback
-│   └── DEPLOYMENT.md         # Deployment checklist
+│   ├── DEPLOYMENT.md         # Deployment checklist
+│   └── BACKEND_DEPLOYMENT.md # Backend deployment best practices
+│
+├── scripts/
+│   ├── build-backend.sh         # Build backend code
+│   ├── deploy.sh                # Full deploy (local - build + image + restart)
+│   ├── deploy-production.sh      # Production deploy (chỉ restart với build folder)
+│   ├── build-and-save-image.sh  # Build và save image để deploy
+│   ├── save-image.sh            # Save Docker image thành file
+│   └── load-image.sh            # Load Docker image từ file
 │
 ├── aw-visitor/               # Frontend
 │   └── dist/                 # (git ignored - rebuild được)

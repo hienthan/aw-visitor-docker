@@ -24,10 +24,15 @@ services:
   # BACKEND - AdonisJS API Server
   # ===========================================================================
   backend:
-    # image: Base image để chạy container
-    # - node:22-alpine: Node.js v22 trên Alpine Linux (nhẹ, ~50MB)
-    # - Các option khác: node:22 (Debian, ~300MB), node:22-slim (~80MB)
-    image: node:22-alpine
+    # build: Build image từ Dockerfile thay vì dùng base image
+    # - context: Thư mục chứa Dockerfile
+    # - dockerfile: Tên file Dockerfile (mặc định là Dockerfile)
+    # Best practice: Build image với node_modules, chỉ mount build folder để update code
+    build:
+      context: ./aw-visitor-backend-adonisjs
+      dockerfile: Dockerfile
+    # image: Tên image sau khi build (optional, giúp dễ reference)
+    image: aw-visitor-backend:latest
 
     # container_name: Tên cố định cho container
     # - Nếu không set, Docker tự generate: <project>-<service>-<number>
@@ -51,20 +56,19 @@ services:
     # Options:
     #   - ro: read-only
     #   - rw: read-write (default)
-    # Bind mount vs Named volume:
-    #   - Bind mount (./path): Map trực tiếp folder từ host
-    #   - Named volume (volume_name): Docker quản lý, lưu ở /var/lib/docker/volumes
+    # Best practice:
+    #   - node_modules: Giữ trong image (không mount) để tránh conflict OS/arch
+    #   - build folder: Mount để update code nhanh không cần rebuild image
+    #   - storage: Mount từ shared storage ra ngoài
     volumes:
-      # Mount toàn bộ backend folder (code + node_modules)
-      - ./aw-visitor-backend-adonisjs:/app
-      # Shared storage - backend write (mount vào build folder vì AdonisJS chạy từ đó)
+      - ./aw-visitor-backend-adonisjs/build:/app/build
       - ${SHARED_STORAGE_PATH:-../shared-storage}/app:/app/build/storage/app
 
     # command: Lệnh chạy khi container start
     # - Override CMD trong Dockerfile
-    # - Có 2 syntax: shell form và exec form
-    # - Exec form (dùng array) recommended: không chạy qua shell, signals được forward đúng
-    command: ["node", "./build/bin/server.js"]
+    # - Tự động tìm server.js ở các vị trí: build/bin/server.js hoặc build/app/bin/server.js
+    # - Cấu trúc chuẩn: build/bin/server.js (AdonisJS build output)
+    command: ["sh", "-c", "if [ -f ./build/bin/server.js ]; then node ./build/bin/server.js; elif [ -f ./build/app/bin/server.js ]; then node ./build/app/bin/server.js; else echo 'Error: server.js not found in build/bin/ or build/app/bin/'; exit 1; fi"]
 
     # environment: Biến môi trường cho container
     # Best practice: Đưa ra docker-compose thay vì hardcode trong Dockerfile
@@ -104,8 +108,6 @@ services:
       DB_PASSWORD: ${DB_PASSWORD:-postgres}
       DB_DATABASE: ${DB_NAME:-visitor_db}
       
-      # External services
-      LARAVEL_API_ENDPOINT: ${LARAVEL_API_ENDPOINT:-https://example.com/api}
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-*}
       
       # MySQL connections (nếu cần)
@@ -145,6 +147,12 @@ services:
       # start_period: Thời gian grace period khi container mới start
       start_period: 60s
 
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
   # ===========================================================================
   # FRONTEND - Nginx Static Server + Reverse Proxy
   # ===========================================================================
@@ -179,6 +187,12 @@ services:
 
     networks:
       - aw-visitor-network
+
+    logging:  
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:80/"]

@@ -44,5 +44,9 @@ backup_*/
 # Docker
 .docker/
 
+# Docker images (saved images)
+docker-images/
+*.tar.gz
+
 aw-visitor-backend-adonisjs/
 aw-visitor/
